@@ -1,19 +1,20 @@
 require 'rjb'
 
 class PoiSpreadsheet
-  
+
 
   def self.init
-    apache_poi_path = File.dirname(__FILE__)+'/../apache/poi-3.10.1-20140818.jar'
-    Rjb::load(apache_poi_path, ['-Xmx512M'])
+    apache_poi_path = File.dirname(__FILE__)+'/../apache/poi-4.0.1.jar'
+    Rjb::load(apache_poi_path, ['-Xmx4G'])
 
-    @cell_class = cell_class = Rjb::import('org.apache.poi.hssf.usermodel.HSSFCell')
+    Rjb::add_jar(File.dirname(__FILE__)+'/../apache/commons-collections4-4.2.jar')
+    Rjb::add_jar(File.dirname(__FILE__)+'/../apache/xmlbeans-3.0.2.jar')
+    Rjb::add_jar(File.dirname(__FILE__)+'/../apache/commons-compress-1.18.jar')
+    Rjb::add_jar(File.dirname(__FILE__)+'/../apache/poi-ooxml-schemas-4.0.1.jar')
+    Rjb::add_jar(File.dirname(__FILE__)+'/../apache/poi-ooxml-4.0.1.jar')
 
+    @cell_class = Rjb::import('org.apache.poi.ss.usermodel.CellType')
 
-    Rjb::import('org.apache.poi.hssf.usermodel.HSSFCreationHelper')
-    Rjb::import('org.apache.poi.hssf.usermodel.HSSFFormulaEvaluator')
-
-    @cell_reference_class = Rjb::import('org.apache.poi.hssf.util.CellReference')
     # You can import all java classes that you need
     @loaded = true
   end
@@ -31,21 +32,24 @@ class PoiSpreadsheet
 
 
   class Workbook
-  
+
     attr_accessor :j_book
 
-    def self.load file
+    def self.load(file)
       @file_name = file
 
-      @workbook_class = Rjb::import('org.apache.poi.hssf.usermodel.HSSFWorkbook')
-      @poifs_class = Rjb::import('org.apache.poi.poifs.filesystem.POIFSFileSystem')
+      @workbook_class = Rjb::import('org.apache.poi.xssf.usermodel.XSSFWorkbook')
       @file_input_class = Rjb::import('java.io.FileInputStream')
+      @zip_secure_file_class = Rjb::import('org.apache.poi.openxml4j.util.ZipSecureFile')
       @file_input = @file_input_class.new(file)
 
-      book = new
+      @zip_secure_file_class.setMinInflateRatio(0);
 
-      fs = @poifs_class.new(@file_input)
-      book.j_book = @workbook_class.new(fs)
+      book = new
+      @sworkbook_class = Rjb::import('org.apache.poi.xssf.streaming.SXSSFWorkbook')
+
+      book.j_book = @sworkbook_class.new(@workbook_class.new(@file_input), 10, false, false)
+
       book
     end
 
@@ -56,13 +60,13 @@ class PoiSpreadsheet
     # Get sheets
     def sheets
       @sheets ||= begin
-        sheets = []
+        sheets = {}
         self.j_book.getNumberOfSheets.times { |i|
           j_sheet = j_book.getSheetAt(i)
           sheet = Worksheet.from_sheet(j_sheet)
           sheet.book = self
           name = j_book.getSheetName(i)
-          sheets << sheet
+          sheets[name] = sheet
         }
         sheets
       end
@@ -112,19 +116,16 @@ class PoiSpreadsheet
       @rows = {}
     end
 
-    # get cell
-    def [](row)
-      @rows[row] ||= begin
-        j_row = j_sheet.getRow(row)
-        row = Row.from_row j_row
-        row.sheet = self
-        row
-      end
+    def set_values(row, start_col, values)
+      j_row = j_sheet.createRow(row)
+      values.each_with_index { |v, col| j_row.createCell(start_col + col).setCellValue(v) }
     end
 
-    # set cell
-    def set(x, y)
-      
+    # get cell
+    def [](row)
+      j_row = j_sheet.getRow(row) || j_sheet.createRow(row)
+      row = Row.from_row(j_row)
+      row
     end
 
     def self.from_sheet j_sheet
@@ -151,30 +152,29 @@ class PoiSpreadsheet
         @types ||= begin
           cell = ::PoiSpreadsheet.cell_class
           {
-            cell.CELL_TYPE_BOOLEAN => :boolean,
-            cell.CELL_TYPE_NUMERIC => :numeric,
-            cell.CELL_TYPE_STRING => :string,
-            cell.CELL_TYPE_BLANK => :blank,
-            cell.CELL_TYPE_ERROR => :error,
-            cell.CELL_TYPE_FORMULA => :formula,
+            cell.BOOLEAN.toString => :boolean,
+            cell.NUMERIC.toString => :numeric,
+            cell.STRING.toString => :string,
+            cell.BLANK.toString => :blank,
+            cell.ERROR.toString => :error,
+            cell.FORMULA.toString => :formula
           }
         end
-        @types[constant]
+        @types[constant.toString]
       end
 
       def []= col, value
-        cell = j_row.getCell(col)
+        cell = j_row.getCell(col) || j_row.createCell(col)
         cell.setCellValue(value)
       end
-      
+
       def [] col
         unless cell = j_row.getCell(col)
           return nil
         end
 
-        #type = self.class.symbol_type(sheet.book._evaluator.evaluateFormulaCell(cell))
         type = self.class.symbol_type(cell.getCellType())
-        
+
         case type
         when :boolean
           cell.getBooleanCellValue()
