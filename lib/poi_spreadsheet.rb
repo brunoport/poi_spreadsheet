@@ -2,7 +2,6 @@ require 'rjb'
 
 class PoiSpreadsheet
 
-
   def self.init
     apache_poi_path = File.dirname(__FILE__)+'/../apache/poi-4.0.1.jar'
     Rjb::load(apache_poi_path, ['-Xmx4G'])
@@ -21,14 +20,12 @@ class PoiSpreadsheet
 
   def self.cell_class; @cell_class; end
 
-
   def self.load file
     unless @loaded
       init
     end
     Workbook.load file
   end
-
 
 
   class Workbook
@@ -48,7 +45,7 @@ class PoiSpreadsheet
       book = new
       @sworkbook_class = Rjb::import('org.apache.poi.xssf.streaming.SXSSFWorkbook')
 
-      book.j_book = @sworkbook_class.new(@workbook_class.new(@file_input), 10, false, false)
+      book.j_book = @sworkbook_class.new(@workbook_class.new(@file_input), 1, false, false)
 
       book
     end
@@ -202,6 +199,3 @@ class PoiSpreadsheet
   end
 
 end
-
-
-
