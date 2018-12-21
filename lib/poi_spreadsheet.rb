@@ -4,7 +4,7 @@ class PoiSpreadsheet
 
   def self.init
     apache_poi_path = File.dirname(__FILE__)+'/../apache/poi-4.0.1.jar'
-    Rjb::load(apache_poi_path, ['-Xmx4G'])
+    Rjb::load(apache_poi_path, ['-Xmx512M'])
 
     Rjb::add_jar(File.dirname(__FILE__)+'/../apache/commons-collections4-4.2.jar')
     Rjb::add_jar(File.dirname(__FILE__)+'/../apache/xmlbeans-3.0.2.jar')
@@ -20,11 +20,11 @@ class PoiSpreadsheet
 
   def self.cell_class; @cell_class; end
 
-  def self.load file
+  def self.load(file, sheet_name=nil)
     unless @loaded
       init
     end
-    Workbook.load file
+    Workbook.load file, sheet_name
   end
 
 
@@ -32,12 +32,13 @@ class PoiSpreadsheet
 
     attr_accessor :j_book
 
-    def self.load(file)
+    def self.load(file, sheet_name=nil)
       @file_name = file
 
       @workbook_class = Rjb::import('org.apache.poi.xssf.usermodel.XSSFWorkbook')
-      @file_input_class = Rjb::import('java.io.FileInputStream')
+      @file_input_class = Rjb::import('java.io.File')
       @zip_secure_file_class = Rjb::import('org.apache.poi.openxml4j.util.ZipSecureFile')
+
       @file_input = @file_input_class.new(file)
 
       @zip_secure_file_class.setMinInflateRatio(0);
@@ -45,8 +46,8 @@ class PoiSpreadsheet
       book = new
       @sworkbook_class = Rjb::import('org.apache.poi.xssf.streaming.SXSSFWorkbook')
 
-      book.j_book = @sworkbook_class.new(@workbook_class.new(@file_input), 1, false, false)
-
+      book.j_book = @sworkbook_class.new(@workbook_class.new(@file_input), 1, true, true)
+      book.sheets(sheet_name)
       book
     end
 
@@ -55,14 +56,17 @@ class PoiSpreadsheet
     end
 
     # Get sheets
-    def sheets
+    def sheets(sheet_name=nil)
       @sheets ||= begin
         sheets = {}
         self.j_book.getNumberOfSheets.times { |i|
+          name = j_book.getSheetName(i)
+
+          next if sheet_name && name != sheet_name
+
           j_sheet = j_book.getSheetAt(i)
           sheet = Worksheet.from_sheet(j_sheet)
           sheet.book = self
-          name = j_book.getSheetName(i)
           sheets[name] = sheet
         }
         sheets
@@ -94,12 +98,10 @@ class PoiSpreadsheet
       begin
         j_book.write(out)
       ensure
-        out.close();
+        out.close
+        j_book.dispose
+        self.j_book = nil
       end
-    end
-
-    def _evaluator
-      @_evaluator ||= j_book.getCreationHelper.createFormulaEvaluator
     end
   end
 
