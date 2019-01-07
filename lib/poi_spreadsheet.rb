@@ -2,9 +2,9 @@ require 'rjb'
 
 class PoiSpreadsheet
 
-  def self.init
+  def self.init(max_heap)
     apache_poi_path = File.dirname(__FILE__)+'/../apache/poi-4.0.1.jar'
-    Rjb::load(apache_poi_path, ['-Xmx512M'])
+    Rjb::load(apache_poi_path, ["-Xmx#{max_heap}"])
 
     Rjb::add_jar(File.dirname(__FILE__)+'/../apache/commons-collections4-4.2.jar')
     Rjb::add_jar(File.dirname(__FILE__)+'/../apache/xmlbeans-3.0.2.jar')
@@ -20,9 +20,9 @@ class PoiSpreadsheet
 
   def self.cell_class; @cell_class; end
 
-  def self.load(file, sheet_name=nil)
+  def self.load(file, sheet_name=nil, max_heap='1024M')
     unless @loaded
-      init
+      init(max_heap)
     end
     Workbook.load file, sheet_name
   end
