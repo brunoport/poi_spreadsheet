@@ -24,9 +24,13 @@ class PoiSpreadsheet
     unless @loaded
       init(max_heap)
     end
+
     Workbook.load file, sheet_name
   end
 
+  def self.unload
+    Rjb::unload
+  end
 
   class Workbook
 
@@ -48,6 +52,7 @@ class PoiSpreadsheet
 
       book.j_book = @sworkbook_class.new(@workbook_class.new(@file_input), 1, true, true)
       book.sheets(sheet_name)
+
       book
     end
 
@@ -93,13 +98,14 @@ class PoiSpreadsheet
 
     def save file_name = @file_name
       @file_output_class ||= Rjb::import('java.io.FileOutputStream')
-      out = @file_output_class.new(file_name);
+      out = @file_output_class.new(file_name)
 
       begin
         j_book.write(out)
       ensure
         out.close
         j_book.dispose
+        j_book.close
         self.j_book = nil
       end
     end
@@ -109,7 +115,6 @@ class PoiSpreadsheet
 
     attr_accessor :j_sheet
     attr_accessor :book
-
 
     def initialize
       @rows = {}
