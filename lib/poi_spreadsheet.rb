@@ -3,33 +3,25 @@ require 'rjb'
 class PoiSpreadsheet
 
   def self.init(max_heap)
-    apache_poi_path = File.dirname(__FILE__)+'/../apache/poi-4.0.1.jar'
-    Rjb::load(apache_poi_path, ["-Xmx#{max_heap}"])
-
-    Rjb::add_jar(File.dirname(__FILE__)+'/../apache/commons-collections4-4.2.jar')
-    Rjb::add_jar(File.dirname(__FILE__)+'/../apache/xmlbeans-3.0.2.jar')
-    Rjb::add_jar(File.dirname(__FILE__)+'/../apache/commons-compress-1.18.jar')
-    Rjb::add_jar(File.dirname(__FILE__)+'/../apache/poi-ooxml-schemas-4.0.1.jar')
-    Rjb::add_jar(File.dirname(__FILE__)+'/../apache/poi-ooxml-4.0.1.jar')
-
-    @cell_class = Rjb::import('org.apache.poi.ss.usermodel.CellType')
-
-    # You can import all java classes that you need
-    @loaded = true
+    Rjb.load(jar_paths, ["-Xmx#{max_heap}"])
   end
 
-  def self.cell_class; @cell_class; end
+  def self.jar_paths
+    file_path = File.dirname(__FILE__)
+
+    Dir.glob("#{file_path+'/../apache/'}*.jar").join(':')
+  end
+
+  def self.cell_class; load_class('org.apache.poi.ss.usermodel.CellType') end
+
+  def self.load_class(name)
+    Rjb.classes[name] || Rjb.import(name)
+  end
 
   def self.load(file, sheet_name=nil, max_heap='1024M')
-    unless @loaded
-      init(max_heap)
-    end
+    init(max_heap)
 
-    Workbook.load file, sheet_name
-  end
-
-  def self.unload
-    Rjb::unload
+    Workbook.load(file, sheet_name)
   end
 
   class Workbook
@@ -37,20 +29,11 @@ class PoiSpreadsheet
     attr_accessor :j_book
 
     def self.load(file, sheet_name=nil)
-      @file_name = file
-
-      @workbook_class = Rjb::import('org.apache.poi.xssf.usermodel.XSSFWorkbook')
-      @file_input_class = Rjb::import('java.io.File')
-      @zip_secure_file_class = Rjb::import('org.apache.poi.openxml4j.util.ZipSecureFile')
-
-      @file_input = @file_input_class.new(file)
-
-      @zip_secure_file_class.setMinInflateRatio(0);
-
       book = new
-      @sworkbook_class = Rjb::import('org.apache.poi.xssf.streaming.SXSSFWorkbook')
 
-      book.j_book = @sworkbook_class.new(@workbook_class.new(@file_input), 1, true, true)
+      workbook = ::PoiSpreadsheet.load_class('org.apache.poi.xssf.usermodel.XSSFWorkbook').new(file)
+
+      book.j_book = ::PoiSpreadsheet.load_class('org.apache.poi.xssf.streaming.SXSSFWorkbook').new(workbook, 1, true, false)
       book.sheets(sheet_name)
 
       book
@@ -64,7 +47,7 @@ class PoiSpreadsheet
     def sheets(sheet_name=nil)
       @sheets ||= begin
         sheets = {}
-        self.j_book.getNumberOfSheets.times { |i|
+        j_book.getNumberOfSheets.times { |i|
           name = j_book.getSheetName(i)
 
           next if sheet_name && name != sheet_name
@@ -78,12 +61,12 @@ class PoiSpreadsheet
       end
     end
 
-    def create_sheet name
-      self.sheets << Worksheet.from_sheet(j_book.createSheet(name))
+    def create_sheet(name)
+      sheets << Worksheet.from_sheet(j_book.createSheet(name))
     end
 
-    def clone_sheet index
-      self.sheets << Worksheet.from_sheet(j_book.cloneSheet(index))
+    def clone_sheet(index)
+      sheets << Worksheet.from_sheet(j_book.cloneSheet(index))
     end
 
     def remove_sheet_at index
@@ -96,16 +79,16 @@ class PoiSpreadsheet
       sheets[k]
     end
 
-    def save file_name = @file_name
-      @file_output_class ||= Rjb::import('java.io.FileOutputStream')
+    def save(file_name)
+      @file_output_class ||= (Rjb.classes['java.io.FileOutputStream'] || Rjb.import('java.io.FileOutputStream'))
       out = @file_output_class.new(file_name)
 
       begin
         j_book.write(out)
       ensure
         out.close
-        j_book.dispose
         j_book.close
+
         self.j_book = nil
       end
     end
