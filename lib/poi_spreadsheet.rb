@@ -106,7 +106,7 @@ class PoiSpreadsheet
     def set_values(row, start_col, values)
       j_row = j_sheet.createRow(row)
       values.map { |v| fix_value_to_java(v) }
-      values.each_with_index { |v, col| j_row.createCell(start_col + col).setCellValue(v) }
+            .each_with_index { |v, col| j_row.createCell(start_col + col).setCellValue(v) }
     end
 
     def fix_value_to_java(v)
